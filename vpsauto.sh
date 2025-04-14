@@ -161,7 +161,7 @@ install_trojan_go() {
     ufw allow 22
 
     # 安装解压Trojan-Go
-    cd /
+    cd /root/
     mkdir trojan
     cd /root/trojan/
     wget https://github.com/p4gefau1t/trojan-go/releases/download/v0.10.6/trojan-go-linux-amd64.zip
