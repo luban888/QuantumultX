@@ -170,8 +170,9 @@ install_trojan_go() {
     # 读取用户个性化输入
     read -p "请输入节点密码：" yourpassword
 
+    cd /root/trojan/
     # 写入 JSON 内容（三行）
-    cat <<EOF > "docker-compose.yml"
+    cat <<EOF > "config.json"
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
@@ -301,7 +302,7 @@ while true; do
             ;;
         5)
             install_trojan_go
-            cd /home/
+            cd /root/trojan/
             ;;
         6)
             install_trojan_go2
