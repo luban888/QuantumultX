@@ -1,164 +1,143 @@
 #!/bin/bash
 
-# 安装3X_UI
+# 1、科技Lion脚本
+install_kejilion(){
+
+    #提示开始安装
+    echo "开始安装科技Lion脚本..."
+
+    # 更新 apt 包索引
+    sudo apt update
+
+    #安装科技Lion脚本
+    bash <(curl -sL kejilion.sh)
+    echo "科技Lion脚本 已安装成功。请手动 1、开启ssh防御和防火墙  2、开放端口  3、开启BBR3优化  4、其他前端配置"
+
+    #安装nano wget unzip nginx
+    k install nano
+    k install wget
+    k install unzip
+    k install nginx
+    echo "nano wget unzip nginx 已安装成功。"
+
+    # 安装SSL证书
+    read -p "请输入已解析的域名：" ssldomin
+    k ssl $ssldomin
+    echo "SSL证书已申请成功。"
+
+    #安装防火墙、开放端口
+    k fhq
+    k dkdk 22
+    k dkdk 80
+    k dkdk 443
+    k dkdk 8443
+    echo "防火墙和端口已开启完成。"
+
+    #安装SSH防御
+    echo "SSH防御需要手动操作，k-13-22-1"
+    k
+    echo "SSH防御已开启成功。"
+
+    #安装BBR3加速
+    k bbr3
+    echo "BBR3加速已安装成功。"
+
+}
+
+
+
+# 2、安装3X_UI
 install_3x_ui(){
     #提示开始安装
     echo "开始安装3x-ui..."
 
-    # 执行3X-ui安装命令
     bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
-
-    # 提示安装完成
-    echo "x-ui 已安装成功。请手动 1、开启防火墙  2、开放端口  3、开启BBR优化  4、其他前端配置"
+    echo "x-ui 已安装成功。"
 }
 
-# 安装docker和nano
-install_docker_nano() {
-    #提示开始安装nano
-    echo "安装nano..."
 
-    # 更新 apt 包索引
-    sudo apt update
 
-    # 安装 nano
-    sudo apt install -y nano
+# 3、部署回落站点
+install_huiluo(){
+    #提示开始安装
+    echo "开始部署回落站点..."
 
-    #提示开始安装docker
-    echo "安装docker..."
+    k install nginx
 
-    # 安装必要的包
-    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    cd /etc/nginx/conf.d/
 
-    # 导入 Docker 官方的 GPG 密钥
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-    # 添加 Docker 仓库
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    # 安装 Docker CE（社区版）
-    sudo apt update
-    sudo apt install -y docker-ce docker-ce-cli containerd.io
-
-    # 启动 Docker 服务并设置开机自启
-    sudo systemctl enable docker
-    sudo systemctl start docker
-
-    #提示开始安装Docker Compose
-    echo "安装Docker Compose..."
-
-    #下载最新的 Docker Compose 版本
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-
-    #赋予可执行权限
-    sudo chmod +x /usr/local/bin/docker-compose
-
-    # 验证 Docker Compose 版本
-    docker-compose --version
-}
-
-# 拉取镜像安装nginx proxy manager(主控服务器)
-install_nginx_proxy_manager() {
-
-    # 提示开始安装 Nginx Proxy Manager 
-   echo "拉取镜像安装 Nginx Proxy Manager (主控服务器)..."
-
-    # 使用 Docker Compose 来安装 Nginx Proxy Manager 首先，创建一个目录来存放配置文件
-    mkdir /home/nginx-proxy-manager
-    cd /home/nginx-proxy-manager
-
+    read -p "请输入已解析的域名：" yourssldomain
     # 写入 JSON 内容（三行）
-    cat <<EOF > "docker-compose.yml"
-version: '3'
+    cat <<EOF > "http_fallback.conf"
 
-services:
-  app:
-    image: jc21/nginx-proxy-manager:latest
-    container_name: nginx-proxy-manager
-    restart: unless-stopped
-    environment:
-      - DB_SQLITE_FILE=/data/database.sqlite
-    volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
-    ports:
-      - "80:80"
-      - "443:443"  # 非主控服务器禁止监听443端口，与trojan冲突
-      - "81:81"  # 这是 Nginx Proxy Manager 的 Web 界面端口
-    networks:
-      - nginx-proxy-manager
+server {
+    listen 80;
+    server_name $yourssldomain;
 
-networks:
-  nginx-proxy-manager:
-    driver: bridge
+    # ACME 验证目录
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    # 普通 http 回落页面
+    location / {
+        root /var/www/html;
+        index index.html;
+    }
+}
+
 EOF
 
-    # 启动 Docker Compose 容器
-    docker-compose up -d
+    sudo mkdir -p /var/www/html
+    echo "This is HTTP fallback site (port 80)" | sudo tee /var/www/html/index.html
 
-    #提示Nginx Proxy Manager安装完成
-    echo "Nginx Proxy Manager(主控服务器)安装完成。请访问 http://your_server_ip:81 进行配置。用户名: admin@example.com 密码: changeme"
+
+    cd /etc/nginx/conf.d/
+    # 写入 JSON 内容（三行）
+    cat <<EOF > "https_fallback.conf"
+
+server {
+    listen 1234 ssl;
+    server_name $yourssldomain;
+
+    ssl_certificate /etc/letsencrypt/live/$yourssldomain/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$yourssldomain/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    root /var/www/https_fallback;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
 }
 
-# 拉取镜像安装nginx proxy manager(非主控服务器)
-install_nginx_proxy_manager2() {
-
-    # 提示开始安装 Nginx Proxy Manager 
-   echo "拉取镜像安装 Nginx Proxy Manager (非主控服务器)..."
-
-    # 使用 Docker Compose 来安装 Nginx Proxy Manager 首先，创建一个目录来存放配置文件
-    mkdir /home/nginx-proxy-manager
-    cd /home/nginx-proxy-manager
-
-    # 写入 JSON 内容（三行）
-    cat <<EOF > "docker-compose.yml"
-version: '3'
-
-services:
-  app:
-    image: jc21/nginx-proxy-manager:latest
-    container_name: nginx-proxy-manager
-    restart: unless-stopped
-    environment:
-      - DB_SQLITE_FILE=/data/database.sqlite
-    volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
-    ports:
-      - "80:80"
-      - "81:81"  # 这是 Nginx Proxy Manager 的 Web 界面端口
-    networks:
-      - nginx-proxy-manager
-
-networks:
-  nginx-proxy-manager:
-    driver: bridge
 EOF
 
-    # 启动 Docker Compose 容器
-    docker-compose up -d
+    sudo mkdir -p /var/www/https_fallback
+    echo "This is HTTPS fallback site (port 1234)" | sudo tee /var/www/https_fallback/index.html
 
-    #提示Nginx Proxy Manager安装完成
-    echo "Nginx Proxy Manager (非主控服务器)安装完成。请访问 http://your_server_ip:81 进行配置。用户名: admin@example.com 密码: changeme"
+    sudo nginx -t
+    sudo systemctl restart nginx
+    echo "回落站点已部署成功。"
 }
 
-# 安装trojan-go
+
+
+# 4、安装trojan-go
 install_trojan_go() {
     echo "开始安装Trojan-Go..."
 
-    # 更新 apt 包索引
-    sudo apt update
-
-    # 安装 unzip
-    sudo apt install unzip
-
-    # 开放80端口
-    ufw allow 80
-
-    # 开放443端口
-    ufw allow 443
-
-    # 开放22端口
-    ufw allow 22
+    # 开放端口
+    k dkdk 22
+    k dkdk 80
+    k dkdk 443
+    k dkdk 8443
+    k install nano
+    k install wget
+    k install unzip
 
     # 安装解压Trojan-Go
     cd /root/
@@ -167,52 +146,44 @@ install_trojan_go() {
     wget https://github.com/p4gefau1t/trojan-go/releases/download/v0.10.6/trojan-go-linux-amd64.zip
     unzip trojan-go-linux-amd64.zip
 
-    # 读取用户个性化输入
-    read -p "请输入节点密码：" yourpassword
+    # 读取用户个性化端口
+    read -p "请输入Trojan-Go节点端口：" yourport
+    # 读取用户个性化密码
+    read -p "请输入Trojan-Go节点密码：" yourpassword
+    # 读取用户个性化域名
+    read -p "请输入Trojan-Go节点域名：" yourdomain
 
     cd /root/trojan/
     # 写入 JSON 内容（三行）
     cat <<EOF > "config.json"
+
 {
   "run_type": "server",
   "local_addr": "0.0.0.0",
-  "local_port": 443,
-  "remote_addr": "18.164.174.61",
+  "local_port": $yourport,
+  "remote_addr": "127.0.0.1",
   "remote_port": 80,
-  "password": [
-    "$yourpassword"
-  ],
   "disable_http_check": false,
-  "udp_timeout": 60,
+  "log_level": 1,
+  "log_file": "",
+  "password": ["$yourpassword"],
+  "udp_timeout": 120,
   "ssl": {
-    "cert": "/home/nginx-proxy-manager/letsencrypt/live/npm-1/cert.pem",
-    "key": "/home/nginx-proxy-manager/letsencrypt/live/npm-1/privkey.pem",
-    "fallback_addr": "18.164.174.61",
-    "fallback_port": 80,
+    "verify": true,
+    "verify_hostname": true,
+    "cert": "/etc/letsencrypt/live/$yourdomain/fullchain.pem",
+    "key": "/etc/letsencrypt/live/$yourdomain/privkey.pem",
     "sni": "m.ctrip.com",
-    "alpn": [
-      "http/1.1",
-      "h2",
-      "h3"
-    ],
+    "alpn": ["http/1.1","h2"],
     "session_ticket": true,
-    "reuse_session": true
-  },
-  "fakeip": {
-    "enabled": true,
-    "fakeip_range": "198.18.0.1/16",
-    "default": "198.18.0.1"
+    "reuse_session": true,
+    "plain_http_response": "<html><body>404 Not Found</body></html>",
+    "fallback_addr": "127.0.0.1",
+    "fallback_port": 1234
   },
   "udp": {
     "enabled": true,
-    "timeout": 60
-  },
-  "forward_proxy": {
-    "enabled": true,
-    "proxy_addr": "127.0.0.1",
-    "proxy_port": 1080,
-    "username": "4090",
-    "password": "4090"
+    "timeout": 120
   },
   "tcp": {
     "no_delay": true,
@@ -223,14 +194,39 @@ install_trojan_go() {
     "enabled": true,
     "concurrency": 8,
     "idle_timeout": 60
+  },
+  "forward_proxy": {
+    "enabled": true,
+    "proxy_addr": "127.0.0.1",
+    "proxy_port": 1080,
+    "username": "1080",
+    "password": "1080"
   }
 }
+
 EOF
 
-    echo "Trojan-Go 已安装成功。请核对配置后使用【/root/trojan/】&【./trojan-go】 启动。"
+    echo "Trojan-Go 已安装成功。"
+    # 读取用户个性化节点名称
+    read -p "请输入Trojan-Go节点名称：" tgname
+    echo "订阅链接如下:"
+    echo "trojan://$yourpassword@$yourdomain:$yourport?type=tcp&security=tls&fp=&alpn=http%2F1.1%2Ch2&sni=m.ctrip.com&skip-cert-verify=true#$tgname"
 }
 
-# trojan-go 自启和后台保活
+
+
+# 5、测试运行trojan-go
+install_ceshi(){
+    #提示开始安装
+    echo "开始测试运行trojan-go..."
+    cd /root/trojan/
+    ./trojan-go -config /root/trojan/config.json
+    echo "测试部署成功。"
+}
+
+
+
+# 6、trojan-go 自启和后台保活
 install_trojan_go2() {
     echo "开始配置trojan-go自启和后台保活..."
     cd /root/trojan/
@@ -251,68 +247,54 @@ EOF
     echo "配置trojan-go自启和后台保活完成，正在重启测试"
 }
 
-# 订阅编辑函数
-install_SUB() {
-    echo "开始订阅转换..."
-    # 读取用户个性化输入
-    read -p "请输入节点密码：" tgpassword
-    # 读取用户个性化输入
-    read -p "请输入节点名称（EB2-GO-US)：" tgname
-    # 读取用户个性化输入
-    read -p "请输入节点解析域名（data.xia.us)：" host
-
-    echo "订阅链接如下:"
-    echo "trojan://$tgpassword@$host:443?type=tcp&security=tls&fp=&alpn=http%2F1.1%2Ch2%2Ch3&sni=m.ctrip.com&skip-cert-verify=true#$tgname"
-}
 
 
 # 主函数
 while true; do
     # 主菜单
     echo "请选择一个操作:"
-    echo "1. 安装 3x-ui"
-    echo "2. 安装 docker、nano"
-    echo "3. 安装 nginx proxy manager(主控服务器)"
-    echo "4. 安装 nginx proxy manager(非主控服务器)"
-    echo "5. 安装 trojan go"
+    echo "1. 安装 科技Lion脚本并配置防御 防火墙 证书 BBR2"
+    echo "2. 安装 3x-ui 面板"
+    echo "3. 安装 trojan go 回落站点"
+    echo "4. 安装 trojan go 主程序"
+    echo "5. 测试 trojan go 主程序"
     echo "6. 安装 trojan go 自启和后台保活"
-    echo "7. 安装 订阅节点Sub"
-    echo "8. 退出"
+    echo "0. 退出"
 
     # 获取用户输入
     read -p "请输入对应的选项数字: " choice
 
     # 根据用户选择执行相应的功能
     case $choice in
+        0)
+            echo "退出脚本。"
+            break
+            ;;
         1)
+            install_kejilion
+            cd /
+            ;;
+        2)
             install_3x_ui
             cd /home/
             ;;
-        2)
-            install_docker_nano
-            cd /home/
-            ;;
         3)
-            install_nginx_proxy_manager
+            install_huiluo
             cd /home/
             ;;
         4)
-            install_nginx_proxy_manager2
+            install_trojan_go
             cd /home/
             ;;
         5)
-            install_trojan_go
-            cd /root/trojan/
+            install_ceshi
+            cd /home/
             ;;
         6)
             install_trojan_go2
-            cd /home/
+            cd /root/trojan/
             ;;
         7)
-            install_SUB
-            cd /home/
-            ;;
-        8)
             echo "退出脚本。"
             break
             ;;
