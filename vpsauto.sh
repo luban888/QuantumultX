@@ -375,7 +375,7 @@ wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snel
 # 主函数
 while true; do
     # 主菜单
-    echo "请选择一个操作:"
+    echo "版本V1.0。请选择一个操作:"
     echo "1、科技Lion脚本安装、防火墙、端口开放、SSH防御、BBR3"
     echo "2、安装3X_UI"
     echo "3、VPN专用SSL证书安装"
@@ -438,4 +438,3 @@ while true; do
     esac
 done
 # 结束脚本
-
