@@ -1,6 +1,7 @@
 #!/bin/bash
+set -e
 
-# 1、科技Lion脚本
+# 1、科技Lion脚本安装、防火墙、端口开放、SSH防御、BBR3
 install_kejilion(){
 
     #提示开始安装
@@ -11,7 +12,7 @@ install_kejilion(){
 
     #安装科技Lion脚本
     bash <(curl -sL kejilion.sh)
-    echo "科技Lion脚本 已安装成功。请手动 1、开启ssh防御和防火墙  2、开放端口  3、开启BBR3优化  4、其他前端配置"
+    echo "科技Lion脚本 已安装成功。"
 
     #安装nano wget unzip nginx
     k install nano
@@ -20,10 +21,8 @@ install_kejilion(){
     k install nginx
     echo "nano wget unzip nginx 已安装成功。"
 
-    # 安装SSL证书
-    read -p "请输入已解析的域名：" ssldomin
-    k ssl $ssldomin
-    echo "SSL证书已申请成功。"
+    #提示开始安装
+    echo "开始安装防火墙..."
 
     #安装防火墙、开放端口
     k fhq
@@ -31,10 +30,10 @@ install_kejilion(){
     k dkdk 80
     k dkdk 443
     k dkdk 8443
-    echo "防火墙和端口已开启完成。"
+    echo "防火墙和端口已开启完成。请手动 1、开启ssh防御  2、开启BBR3优化 "
 
     #安装SSH防御
-    echo "SSH防御需要手动操作，k-13-22-1"
+    read -p "开启SSH防御需要手动操作，k-13-22-1：" SSHFY999
     k
     echo "SSH防御已开启成功。"
 
@@ -43,7 +42,6 @@ install_kejilion(){
     echo "BBR3加速已安装成功。"
 
 }
-
 
 
 # 2、安装3X_UI
@@ -58,75 +56,122 @@ install_3x_ui(){
 
 
 # 3、部署回落站点
-install_huiluo(){
+install_fallback_site(){
     #提示开始安装
+    k install nginx
     echo "开始部署回落站点..."
 
-    k install nginx
 
-    cd /etc/nginx/conf.d/
-
-    read -p "请输入已解析的域名：" yourssldomain
+    read -p "请输入已解析的域名：" DOMAIN
     # 写入 JSON 内容（三行）
-    cat <<EOF > "http_fallback.conf"
 
-server {
-    listen 80;
-    server_name $yourssldomain;
+# DOMAIN="your.domain.com"   # 换成你的域名
+# EMAIL="you@example.com"    # 换成你的邮箱（用于证书申请）
 
-    # ACME 验证目录
-    location /.well-known/acme-challenge/ {
-        root /var/www/html;
-    }
+# 1. 更新系统并安装依赖
+apt update
+apt install -y nginx certbot python3-certbot-nginx
 
-    # 普通 http 回落页面
-    location / {
-        root /var/www/html;
-        index index.html;
-    }
-}
+# 2. 创建网站目录
+mkdir -p /var/www/fallback_site
 
+# 3. 写入简单网页
+cat > /var/www/fallback_site/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
+    nav a { margin: 0 15px; text-decoration: none; color: #0073e6; }
+    h1 { margin-top: 100px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/about.html">About</a>
+    <a href="/blog.html">Blog</a>
+    <a href="/contact.html">Contact</a>
+  </nav>
+  <h1>Welcome to My Site</h1>
+  <p>This is a personal homepage with some demo content.</p>
+</body>
+</html>
 EOF
 
-    sudo mkdir -p /var/www/html
-    echo "This is HTTP fallback site (port 80)" | sudo tee /var/www/html/index.html
+# 4. 生成额外子页面
+echo "<h1>About Page</h1>" > /var/www/fallback_site/about.html
+echo "<h1>Blog Page</h1>" > /var/www/fallback_site/blog.html
+echo "<h1>Contact Page</h1>" > /var/www/fallback_site/contact.html
 
-
-    cd /etc/nginx/conf.d/
-    # 写入 JSON 内容（三行）
-    cat <<EOF > "https_fallback.conf"
-
+# 5. Nginx 配置
+cat > /etc/nginx/sites-available/fallback <<EOF
 server {
-    listen 1234 ssl;
-    server_name $yourssldomain;
+    listen 80;
+    server_name $DOMAIN;
 
-    ssl_certificate /etc/letsencrypt/live/$yourssldomain/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$yourssldomain/privkey.pem;
-
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-
-    root /var/www/https_fallback;
+    root /var/www/fallback_site;
     index index.html;
 
     location / {
-        try_files $uri $uri/ =404;
+        try_files \$uri \$uri/ =404;
     }
 }
 
+server {
+    listen 1234 ssl;
+    server_name $DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    root /var/www/fallback_site;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
 EOF
 
-    sudo mkdir -p /var/www/https_fallback
-    echo "This is HTTPS fallback site (port 1234)" | sudo tee /var/www/https_fallback/index.html
+# 6. 启用配置
+ln -sf /etc/nginx/sites-available/fallback /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
 
-    sudo nginx -t
-    sudo systemctl restart nginx
-    echo "回落站点已部署成功。"
+# 7. 使用 Certbot 申请证书（自动续期）
+# certbot --nginx -d $DOMAIN --email $EMAIL --agree-tos --non-interactive
+
+echo "回落站点部署完成！"
 }
 
 
 
-# 4、安装trojan-go
+# 4、VPN专用SSL证书安装
+install_VPN_SSL(){
+
+    #提示开始安装
+    echo "开始安装VPN专用SSL证书..."
+
+    #安装防火墙、开放端口
+    k dkdk 22
+    k dkdk 80
+    k dkdk 443
+    k dkdk 8443
+    echo "防火墙和端口已开启完成。"
+
+    # 安装SSL证书
+    read -p "请输入已解析的VPN域名：" DOMAIN
+    k ssl $DOMAIN
+    echo "SSL证书已申请成功。"
+
+}
+
+
+
+# 5、安装trojan-go
 install_trojan_go() {
     echo "开始安装Trojan-Go..."
 
@@ -215,7 +260,7 @@ EOF
 
 
 
-# 5、测试运行trojan-go
+# 6、测试运行trojan-go
 install_ceshi(){
     #提示开始安装
     echo "开始测试运行trojan-go..."
@@ -226,7 +271,7 @@ install_ceshi(){
 
 
 
-# 6、trojan-go 自启和后台保活
+# 7、trojan-go 自启和后台保活
 install_trojan_go2() {
     echo "开始配置trojan-go自启和后台保活..."
     cd /root/trojan/
@@ -248,18 +293,48 @@ EOF
 }
 
 
+# 8、VLESS 搭建
+install_SUI(){
+    #提示开始安装
+    echo "开始安装SUI..."
+
+    bash <(curl -Ls https://raw.githubusercontent.com/alireza0/s-ui/master/install.sh)
+
+    echo "SUI 已安装成功。"
+}
+
+
+# 9、SNELL 搭建
+install_SNELL(){
+    #提示开始安装
+    echo "开始安装SNELL..."
+
+wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snell.sh && ./snell.sh
+
+    echo "SNELL 已安装成功。"
+}
+
+
+
+
+
+
+
 
 # 主函数
 while true; do
     # 主菜单
     echo "请选择一个操作:"
-    echo "1. 安装 科技Lion脚本并配置防御 防火墙 证书 BBR2"
-    echo "2. 安装 3x-ui 面板"
-    echo "3. 安装 trojan go 回落站点"
-    echo "4. 安装 trojan go 主程序"
-    echo "5. 测试 trojan go 主程序"
-    echo "6. 安装 trojan go 自启和后台保活"
-    echo "0. 退出"
+    echo "1、科技Lion脚本安装、防火墙、端口开放、SSH防御、BBR3"
+    echo "2、安装3X_UI"
+    echo "3、部署回落站点"
+    echo "4、VPN专用SSL证书安装"
+    echo "5、安装trojan-go"
+    echo "6、测试运行trojan-go"
+    echo "7、trojan-go 自启和后台保活"
+    echo "8、VLESS 搭建"
+    echo "9、SNELL 搭建"
+    echo "0、退出"
 
     # 获取用户输入
     read -p "请输入对应的选项数字: " choice
@@ -279,24 +354,32 @@ while true; do
             cd /home/
             ;;
         3)
-            install_huiluo
+            install_fallback_site
             cd /home/
             ;;
         4)
-            install_trojan_go
+            install_VPN_SSL
             cd /home/
             ;;
         5)
-            install_ceshi
+            install_trojan_go
             cd /home/
             ;;
         6)
-            install_trojan_go2
+            install_ceshi
             cd /root/trojan/
             ;;
         7)
-            echo "退出脚本。"
-            break
+            install_trojan_go2
+            cd /root/trojan/
+            ;;
+        8)
+            install_SUI
+            cd /
+            ;;
+        9)
+            install_SNELL
+            cd /
             ;;
         *)
             echo "无效的选项，请重试。"
