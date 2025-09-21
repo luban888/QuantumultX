@@ -312,6 +312,12 @@ install_SNELL(){
 wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snell.sh && ./snell.sh
 
     echo "SNELL 已安装成功。"
+    
+    #开放端口
+    read -p "SNELL端口" snellport
+    k dkdk $snellport
+    echo "SNELL端口已开放成功。"
+
 }
 
 
