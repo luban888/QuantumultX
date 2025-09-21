@@ -25,12 +25,16 @@ install_kejilion(){
     echo "开始安装防火墙..."
 
     #安装防火墙、开放端口
+
+    read -p "安装完成后-请手动关闭所有端口-操作指令-4-0" kfhq4
     k fhq
+    echo "防火墙已开启成功。"
+
     k dkdk 22
     k dkdk 80
     k dkdk 443
     k dkdk 8443
-    echo "防火墙和端口已开启完成。请手动 1、开启ssh防御  2、开启BBR3优化 "
+    echo "防火墙端口已开启完成"
 
     #安装SSH防御
     read -p "开启SSH防御需要手动操作，k-13-22-1：" SSHFY999
@@ -54,106 +58,11 @@ install_3x_ui(){
 }
 
 
-
-# 3、部署回落站点
-install_fallback_site(){
-    #提示开始安装
-    k install nginx
-    echo "开始部署回落站点..."
-
-
-    read -p "请输入已解析的域名：" DOMAIN
-    # 写入 JSON 内容（三行）
-
-# DOMAIN="your.domain.com"   # 换成你的域名
-# EMAIL="you@example.com"    # 换成你的邮箱（用于证书申请）
-
-# 1. 更新系统并安装依赖
-apt update
-apt install -y nginx certbot python3-certbot-nginx
-
-# 2. 创建网站目录
-mkdir -p /var/www/fallback_site
-
-# 3. 写入简单网页
-cat > /var/www/fallback_site/index.html <<'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Welcome</title>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; margin: 50px; }
-    nav a { margin: 0 15px; text-decoration: none; color: #0073e6; }
-    h1 { margin-top: 100px; }
-  </style>
-</head>
-<body>
-  <nav>
-    <a href="/">Home</a>
-    <a href="/about.html">About</a>
-    <a href="/blog.html">Blog</a>
-    <a href="/contact.html">Contact</a>
-  </nav>
-  <h1>Welcome to My Site</h1>
-  <p>This is a personal homepage with some demo content.</p>
-</body>
-</html>
-EOF
-
-# 4. 生成额外子页面
-echo "<h1>About Page</h1>" > /var/www/fallback_site/about.html
-echo "<h1>Blog Page</h1>" > /var/www/fallback_site/blog.html
-echo "<h1>Contact Page</h1>" > /var/www/fallback_site/contact.html
-
-# 5. Nginx 配置
-cat > /etc/nginx/sites-available/fallback <<EOF
-server {
-    listen 80;
-    server_name $DOMAIN;
-
-    root /var/www/fallback_site;
-    index index.html;
-
-    location / {
-        try_files \$uri \$uri/ =404;
-    }
-}
-
-server {
-    listen 1234 ssl;
-    server_name $DOMAIN;
-
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    root /var/www/fallback_site;
-    index index.html;
-
-    location / {
-        try_files \$uri \$uri/ =404;
-    }
-}
-EOF
-
-# 6. 启用配置
-ln -sf /etc/nginx/sites-available/fallback /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-
-# 7. 使用 Certbot 申请证书（自动续期）
-# certbot --nginx -d $DOMAIN --email $EMAIL --agree-tos --non-interactive
-
-echo "回落站点部署完成！"
-}
-
-
-
-# 4、VPN专用SSL证书安装
+# 3、VPN及回落站点专用SSL证书安装
 install_VPN_SSL(){
 
     #提示开始安装
-    echo "开始安装VPN专用SSL证书..."
+    echo "开始安装VPN及回落站点专用SSL证书..."
 
     #安装防火墙、开放端口
     k dkdk 22
@@ -167,6 +76,142 @@ install_VPN_SSL(){
     k ssl $DOMAIN
     echo "SSL证书已申请成功。"
 
+}
+
+
+# 4、部署回落站点
+install_fallback_site(){
+    #提示开始安装
+    k install nginx
+    echo "开始部署回落站点..."
+    read -p "请输入已解析的域名：" DOMAIN
+    # 写入 JSON 内容（三行）
+
+
+### ===== 可配置变量 =====
+# DOMAIN="speedtest.lubancube.com"         # 你的域名
+WEBROOT="/var/www/fallback_site"         # 回落站点根目录
+# CERT_FILE="/etc/ssl/mycert/fullchain.pem"  # 你“另外申请”的证书路径（可改）
+# KEY_FILE="/etc/ssl/mycert/privkey.pem"     # 你“另外申请”的私钥路径（可改）
+# 如你将来打算用 LE 的默认路径，也可直接改成：
+CERT_FILE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+KEY_FILE="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+### =====================
+
+SITE80="/etc/nginx/sites-available/fallback-80"
+SITE443X="/etc/nginx/sites-available/fallback-1234"
+EN80="/etc/nginx/sites-enabled/fallback-80"
+EN443X="/etc/nginx/sites-enabled/fallback-1234"
+
+echo "[1/6] 安装 nginx（如已安装会跳过）..."
+apt update
+apt install -y nginx >/dev/null
+
+echo "[2/6] 修正 nginx.conf include（避免默认站点缺失报错）..."
+sed -i 's#include /etc/nginx/sites-enabled/.*;#include /etc/nginx/sites-enabled/*;#' /etc/nginx/nginx.conf || true
+mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+echo "[3/6] 准备站点文件..."
+mkdir -p "${WEBROOT}/.well-known/acme-challenge"
+cat > "${WEBROOT}/index.html" <<'EOF'
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Fallback Site</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;margin:48px}a{color:#0a66c2;text-decoration:none;margin-right:12px}</style>
+</head><body>
+<nav><a href="/">Home</a><a href="/about.html">About</a><a href="/blog.html">Blog</a><a href="/contact.html">Contact</a></nav>
+<h1>Trojan-Go Fallback</h1>
+<p>If you see this page, HTTP fallback is working.</p>
+</body></html>
+EOF
+echo "<h1>About</h1>"   > "${WEBROOT}/about.html"
+echo "<h1>Blog</h1>"    > "${WEBROOT}/blog.html"
+echo "<h1>Contact</h1>" > "${WEBROOT}/contact.html"
+
+echo "[4/6] 写入 80 端口（HTTP 回落 + ACME 验证）配置..."
+cat > "$SITE80" <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    root ${WEBROOT};
+    index index.html;
+
+    # ACME http-01 验证路径（如将来需要）
+    location ^~ /.well-known/acme-challenge/ {
+        default_type "text/plain";
+        alias ${WEBROOT}/.well-known/acme-challenge/;
+        access_log off;
+    }
+
+    # 其它请求 → 静态站点（回落伪装）
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOF
+ln -sf "$SITE80" "$EN80"
+
+echo "[5/6] 可选：写入 1234 端口（HTTPS 回落）配置文件（稍后再决定是否启用）..."
+cat > "$SITE443X" <<EOF
+server {
+    listen 1234 ssl;
+    server_name ${DOMAIN};
+
+    ssl_certificate     ${CERT_FILE};
+    ssl_certificate_key ${KEY_FILE};
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    root ${WEBROOT};
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+}
+EOF
+
+echo "[6/6] 启动/重载 Nginx，仅启用 80；若检测到证书文件存在再启用 1234..."
+nginx -t
+systemctl restart nginx
+
+if [[ -s "${CERT_FILE}" && -s "${KEY_FILE}" ]]; then
+  echo "[检测] 发现证书与私钥文件，启用 1234 HTTPS 回落..."
+  ln -sf "$SITE443X" "$EN443X"
+  nginx -t && systemctl reload nginx
+else
+  echo "[提示] 尚未找到证书："
+  echo "  CERT_FILE=${CERT_FILE}"
+  echo "  KEY_FILE=${KEY_FILE}"
+  echo "已仅启用 80（HTTP 回落）。当你把证书放到以上路径后，执行："
+  echo "  ln -sf ${SITE443X} ${EN443X} && nginx -t && systemctl reload nginx"
+fi
+
+echo "—— 状态检查 ——"
+ss -ltnp | grep -E ':80|:1234' || true
+
+cat <<'END_NOTE'
+
+✅ 完成（不内置证书申请）：
+
+- 80 端口：HTTP 回落 + 预留 ACME 验证路径（/.well-known/acme-challenge/）
+- 1234 端口：HTTPS 回落（只有在检测到你已放好证书后才会启用）
+- 如稍后才放证书：把文件放到脚本中的 CERT_FILE/KEY_FILE 路径，然后运行：
+    ln -sf /etc/nginx/sites-available/fallback-1234 /etc/nginx/sites-enabled/fallback-1234
+    nginx -t && systemctl reload nginx
+
+📌 Trojan-Go（示例）：
+"fallbacks": [
+  { "dest": "127.0.0.1:80",   "alpn": ["http/1.1"] },
+  { "dest": "127.0.0.1:1234", "alpn": ["http/1.1"] }
+]
+
+注意：
+- 在你启用 1234 前，请先只保留 80 作为回落，避免 connect refused。
+- 若你使用的是自签名或第三方签发的证书，把 CERT_FILE/KEY_FILE 改成对应路径即可。
+- 不建议在 80 上做 301 到 443，因为 443 通常留给 Trojan-Go 主服务。
+
+END_NOTE
+echo "回落站点部署完成！"
 }
 
 
@@ -312,7 +357,7 @@ install_SNELL(){
 wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snell.sh && ./snell.sh
 
     echo "SNELL 已安装成功。"
-    
+
     #开放端口
     read -p "SNELL端口" snellport
     k dkdk $snellport
@@ -333,8 +378,8 @@ while true; do
     echo "请选择一个操作:"
     echo "1、科技Lion脚本安装、防火墙、端口开放、SSH防御、BBR3"
     echo "2、安装3X_UI"
-    echo "3、部署回落站点"
-    echo "4、VPN专用SSL证书安装"
+    echo "3、VPN专用SSL证书安装"
+    echo "4、部署回落站点"
     echo "5、安装trojan-go"
     echo "6、测试运行trojan-go"
     echo "7、trojan-go 自启和后台保活"
@@ -360,11 +405,11 @@ while true; do
             cd /home/
             ;;
         3)
-            install_fallback_site
+            install_VPN_SSL
             cd /home/
             ;;
         4)
-            install_VPN_SSL
+            install_fallback_site
             cd /home/
             ;;
         5)
@@ -393,3 +438,4 @@ while true; do
     esac
 done
 # 结束脚本
+
