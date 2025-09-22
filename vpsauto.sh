@@ -26,7 +26,7 @@ install_kejilion(){
 
     #安装防火墙、开放端口
 
-    read -p "安装完成后-请手动关闭所有端口-操作指令-4-0" kfhq4
+    read -p "安装完成后-请手动关闭所有端口-操作指令-4-0(确认：1):" kfhq4
     k fhq
     echo "防火墙已开启成功。"
 
@@ -362,7 +362,8 @@ wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snel
     read -p "SNELL端口" snellport
     k dkdk $snellport
     echo "SNELL端口已开放成功。"
-
+    cd /root/snell
+    echo "手动在配置中添加remote = 127.0.0.1:1080"
 }
 
 
