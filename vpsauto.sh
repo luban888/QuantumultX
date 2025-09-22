@@ -232,7 +232,7 @@ install_trojan_go() {
     # 读取用户个性化密码
     read -p "请输入Trojan-Go节点密码：" yourpassword
     # 读取用户个性化域名
-    read -p "请输入Trojan-Go节点域名：" yourdomain
+    read -p "请输入Trojan-Go节点SSL域名：" yourdomain
 
     cd /root/trojan/
     # 写入 JSON 内容（三行）
