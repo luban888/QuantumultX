@@ -8,7 +8,7 @@ install_kejilion(){
     echo "开始安装科技Lion脚本..."
 
     # 更新 apt 包索引
-    sudo apt update
+    sudo apt update -y
 
     #安装科技Lion脚本
     bash <(curl -sL kejilion.sh)
@@ -87,130 +87,122 @@ install_fallback_site(){
     read -p "请输入已解析的域名：" DOMAIN
     # 写入 JSON 内容（三行）
 
-
 ### ===== 可配置变量 =====
 # DOMAIN="speedtest.lubancube.com"         # 你的域名
-WEBROOT="/var/www/fallback_site"         # 回落站点根目录
+# WEBROOT="/var/www/fallback_site"         # 回落站点根目录
 # CERT_FILE="/etc/ssl/mycert/fullchain.pem"  # 你“另外申请”的证书路径（可改）
 # KEY_FILE="/etc/ssl/mycert/privkey.pem"     # 你“另外申请”的私钥路径（可改）
 # 如你将来打算用 LE 的默认路径，也可直接改成：
-CERT_FILE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
-KEY_FILE="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+# CERT_FILE="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+# KEY_FILE="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
 ### =====================
 
-SITE80="/etc/nginx/sites-available/fallback-80"
-SITE443X="/etc/nginx/sites-available/fallback-1234"
-EN80="/etc/nginx/sites-enabled/fallback-80"
-EN443X="/etc/nginx/sites-enabled/fallback-1234"
 
-echo "[1/6] 安装 nginx（如已安装会跳过）..."
-apt update
-apt install -y nginx >/dev/null
+# ======= 配置变量 =======
+# DOMAIN="your.domain.com"     # 改成你的域名
+WEBROOT="/var/www/fallback_site"
+SITE="/etc/nginx/sites-available/fallback"
+# ========================
 
-echo "[2/6] 修正 nginx.conf include（避免默认站点缺失报错）..."
-sed -i 's#include /etc/nginx/sites-enabled/.*;#include /etc/nginx/sites-enabled/*;#' /etc/nginx/nginx.conf || true
-mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+echo "[1/4] 安装 nginx..."
+sudo apt update -y
+sudo apt install -y nginx
 
-echo "[3/6] 准备站点文件..."
-mkdir -p "${WEBROOT}/.well-known/acme-challenge"
-cat > "${WEBROOT}/index.html" <<'EOF'
+echo "[2/4] 修正 nginx 主配置 include..."
+sudo sed -i 's#include /etc/nginx/sites-enabled/.*;#include /etc/nginx/sites-enabled/*;#' /etc/nginx/nginx.conf || true
+sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+echo "[3/4] 准备站点目录和内容..."
+sudo mkdir -p "${WEBROOT}/.well-known/acme-challenge"
+sudo tee "${WEBROOT}/index.html" >/dev/null <<'EOF'
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Fallback Site</title>
-<style>body{font-family:Arial,Helvetica,sans-serif;margin:48px}a{color:#0a66c2;text-decoration:none;margin-right:12px}</style>
-</head><body>
-<nav><a href="/">Home</a><a href="/about.html">About</a><a href="/blog.html">Blog</a><a href="/contact.html">Contact</a></nav>
-<h1>Trojan-Go Fallback</h1>
-<p>If you see this page, HTTP fallback is working.</p>
-</body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Welcome</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; background: #fafafa; color: #333; }
+    header { border-bottom: 1px solid #ddd; margin-bottom: 20px; }
+    nav a { margin-right: 15px; text-decoration: none; color: #0366d6; }
+    nav a:hover { text-decoration: underline; }
+    footer { margin-top: 40px; font-size: 0.9em; color: #777; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Welcome to Our Site</h1>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/about.html">About</a>
+      <a href="/contact.html">Contact</a>
+    </nav>
+  </header>
+  <main>
+    <h2>Simple Demo Page</h2>
+    <p>This is a simple and normal demo website. The server is running properly.</p>
+    <p>You can customize this page by editing <code>/var/www/fallback_site/index.html</code>.</p>
+  </main>
+  <footer>
+    <p>&copy; 2025 Example Company. All rights reserved.</p>
+  </footer>
+</body>
+</html>
 EOF
-echo "<h1>About</h1>"   > "${WEBROOT}/about.html"
-echo "<h1>Blog</h1>"    > "${WEBROOT}/blog.html"
-echo "<h1>Contact</h1>" > "${WEBROOT}/contact.html"
 
-echo "[4/6] 写入 80 端口（HTTP 回落 + ACME 验证）配置..."
-cat > "$SITE80" <<EOF
+# 补充 About 页面
+sudo tee "${WEBROOT}/about.html" >/dev/null <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>About Us</title></head>
+<body>
+<h1>About</h1>
+<p>This is a sample About page. You can put normal content here.</p>
+</body>
+</html>
+EOF
+
+# 补充 Contact 页面
+sudo tee "${WEBROOT}/contact.html" >/dev/null <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Contact</title></head>
+<body>
+<h1>Contact</h1>
+<p>For inquiries, please send an email to <a href="mailto:info@example.com">info@example.com</a>.</p>
+</body>
+</html>
+EOF
+
+echo "[4/4] 写入 80 端口 Nginx 配置..."
+sudo tee "$SITE" >/dev/null <<EOF
 server {
     listen 80;
+    listen [::]:80;
     server_name ${DOMAIN};
 
     root ${WEBROOT};
     index index.html;
 
-    # ACME http-01 验证路径（如将来需要）
+    # ACME http-01 验证路径
     location ^~ /.well-known/acme-challenge/ {
         default_type "text/plain";
         alias ${WEBROOT}/.well-known/acme-challenge/;
         access_log off;
     }
 
-    # 其它请求 → 静态站点（回落伪装）
-    location / {
-        try_files \$uri \$uri/ =404;
-    }
-}
-EOF
-ln -sf "$SITE80" "$EN80"
-
-echo "[5/6] 可选：写入 1234 端口（HTTPS 回落）配置文件（稍后再决定是否启用）..."
-cat > "$SITE443X" <<EOF
-server {
-    listen 1234 ssl;
-    server_name ${DOMAIN};
-
-    ssl_certificate     ${CERT_FILE};
-    ssl_certificate_key ${KEY_FILE};
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    root ${WEBROOT};
-    index index.html;
-
+    # 其它请求 → 回落站点
     location / {
         try_files \$uri \$uri/ =404;
     }
 }
 EOF
 
-echo "[6/6] 启动/重载 Nginx，仅启用 80；若检测到证书文件存在再启用 1234..."
-nginx -t
-systemctl restart nginx
+sudo ln -sf "$SITE" /etc/nginx/sites-enabled/fallback
+sudo nginx -t && sudo systemctl restart nginx
 
-if [[ -s "${CERT_FILE}" && -s "${KEY_FILE}" ]]; then
-  echo "[检测] 发现证书与私钥文件，启用 1234 HTTPS 回落..."
-  ln -sf "$SITE443X" "$EN443X"
-  nginx -t && systemctl reload nginx
-else
-  echo "[提示] 尚未找到证书："
-  echo "  CERT_FILE=${CERT_FILE}"
-  echo "  KEY_FILE=${KEY_FILE}"
-  echo "已仅启用 80（HTTP 回落）。当你把证书放到以上路径后，执行："
-  echo "  ln -sf ${SITE443X} ${EN443X} && nginx -t && systemctl reload nginx"
-fi
+echo "✅ 部署完成！"
+echo "检查： curl -I http://${DOMAIN}"
 
-echo "—— 状态检查 ——"
-ss -ltnp | grep -E ':80|:1234' || true
-
-cat <<'END_NOTE'
-
-✅ 完成（不内置证书申请）：
-
-- 80 端口：HTTP 回落 + 预留 ACME 验证路径（/.well-known/acme-challenge/）
-- 1234 端口：HTTPS 回落（只有在检测到你已放好证书后才会启用）
-- 如稍后才放证书：把文件放到脚本中的 CERT_FILE/KEY_FILE 路径，然后运行：
-    ln -sf /etc/nginx/sites-available/fallback-1234 /etc/nginx/sites-enabled/fallback-1234
-    nginx -t && systemctl reload nginx
-
-📌 Trojan-Go（示例）：
-"fallbacks": [
-  { "dest": "127.0.0.1:80",   "alpn": ["http/1.1"] },
-  { "dest": "127.0.0.1:1234", "alpn": ["http/1.1"] }
-]
-
-注意：
-- 在你启用 1234 前，请先只保留 80 作为回落，避免 connect refused。
-- 若你使用的是自签名或第三方签发的证书，把 CERT_FILE/KEY_FILE 改成对应路径即可。
-- 不建议在 80 上做 301 到 443，因为 443 通常留给 Trojan-Go 主服务。
-
-END_NOTE
 echo "回落站点部署完成！"
 }
 
@@ -269,7 +261,7 @@ install_trojan_go() {
     "reuse_session": true,
     "plain_http_response": "<html><body>404 Not Found</body></html>",
     "fallback_addr": "127.0.0.1",
-    "fallback_port": 1234
+    "fallback_port": 80
   },
   "udp": {
     "enabled": true,
