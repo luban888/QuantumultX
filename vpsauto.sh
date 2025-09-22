@@ -345,16 +345,15 @@ install_SNELL(){
     #提示开始安装
     echo "开始安装SNELL..."
 
-wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snell.sh && ./snell.sh
-
-    echo "SNELL 已安装成功。"
-
     #开放端口
     read -p "SNELL端口" snellport
     k dkdk $snellport
     echo "SNELL端口已开放成功。"
-    cd /root/snell
-    echo "手动在配置中添加remote = 127.0.0.1:1080"
+
+wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snell.sh && ./snell.sh
+
+    echo "SNELL 已安装成功。"
+
 }
 
 
