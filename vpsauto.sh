@@ -26,7 +26,7 @@ install_kejilion(){
 
     #安装防火墙、开放端口
 
-    read -p "安装完成后-请手动关闭所有端口-操作指令-4-0(确认：1):" kfhq4
+    read -p "安装完成后请手动-关闭所有端口 操作指令：4  0  (回车确认):" kfhq4
     k fhq
     echo "防火墙已开启成功。"
 
@@ -37,7 +37,7 @@ install_kejilion(){
     echo "防火墙端口已开启完成"
 
     #安装SSH防御
-    read -p "开启SSH防御需要手动操作，k-13-22-1：" SSHFY999
+    read -p "开启SSH防御需要手动操作： 13  22  1  (回车确认):" SSHFY999
     k
     echo "SSH防御已开启成功。"
 
@@ -346,7 +346,7 @@ install_SNELL(){
     echo "开始安装SNELL..."
 
     #开放端口
-    read -p "SNELL端口" snellport
+    read -p "防火墙开放SNELL端口:" snellport
     k dkdk $snellport
     echo "SNELL端口已开放成功。"
 
@@ -355,9 +355,6 @@ wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snel
     echo "SNELL 已安装成功。"
 
 }
-
-
-
 
 
 
