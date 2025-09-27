@@ -356,6 +356,13 @@ wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snel
 
 }
 
+# 10、SNELL 管理
+install_SNELLSET(){
+
+wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snell.sh && ./snell.sh
+
+
+}
 
 
 
@@ -363,7 +370,7 @@ wget -O snell.sh --no-check-certificate https://git.io/Snell.sh && chmod +x snel
 # 主函数
 while true; do
     # 主菜单
-    echo "版本V1.0。请选择一个操作:"
+    echo "版本V1.1。请选择一个操作:"
     echo "1、科技Lion脚本安装、防火墙、端口开放、SSH防御、BBR3"
     echo "2、安装3X_UI"
     echo "3、VPN专用SSL证书安装"
@@ -373,6 +380,7 @@ while true; do
     echo "7、trojan-go 自启和后台保活"
     echo "8、VLESS 搭建"
     echo "9、SNELL 搭建"
+    echo "10、SNELL 管理"
     echo "0、退出"
 
     # 获取用户输入
@@ -418,6 +426,10 @@ while true; do
             ;;
         9)
             install_SNELL
+            cd /
+            ;;
+        10)
+            install_SNELLSET
             cd /
             ;;
         *)
